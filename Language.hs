@@ -166,6 +166,26 @@ iInterleave sep [seq] = seq
 iInterleave sep (seq : seqs) =
   seq `iAppend` (sep `iAppend` iInterleave sep seqs)
 
+iFWNum :: Int -> Int -> Iseq
+iFWNum width n =
+  iStr (space (width - length digits) ++ digits)
+  where
+    digits = show n
+
+iLayn :: [Iseq] -> Iseq
+iLayn seqs =
+  iConcat (map lay_item (zip [1 ..] seqs))
+  where
+    lay_item (n, seq) =
+      iConcat
+        [ iFWNum 4 n,
+          iStr ")",
+          iIndent seq,
+          iNewline
+        ]
+
+-- print Expr
+
 pprExpr :: CoreExpr -> Iseq
 pprExpr (ENum n) = iNum n
 pprExpr (EVar v) = iStr v
