@@ -1,5 +1,6 @@
 module Language where
 
+import Data.Char
 import Utils
 
 type Name = String
@@ -272,6 +273,44 @@ pprProgram prog =
 
 pprint :: CoreProgram -> String
 pprint prog = iDisplay (pprProgram prog)
+
+-- parser
+
+type Token = String
+
+twoCharOps :: [String]
+twoCharOps =
+  [ "==",
+    "~=",
+    ">=",
+    "<=",
+    "->"
+  ]
+
+clex :: String -> [Token]
+clex (c : cs) | isWhiteSpace c = clex cs
+clex (c : cs) | isDigit c = num_token : clex rest_cs
+  where
+    num_token = c : takeWhile isDigit cs
+    rest_cs = dropWhile isDigit cs
+clex (c : cs) | isAlpha c = var_tok : clex rest_cs
+  where
+    var_tok = c : takeWhile isIdChar cs
+    rest_cs = dropWhile isIdChar cs
+-- comment
+clex ('|' : '|' : cs) = clex (dropWhile (/= '\n') cs)
+clex (c1 : c2 : cs) | ([c1, c2] `elem` twoCharOps) = [c1, c2] : clex cs
+clex (c : cs) = [c] : clex cs
+clex [] = []
+
+syntax :: [Token] -> CoreProgram
+syntax = error ""
+
+parse :: String -> CoreProgram
+parse = syntax . clex
+
+-- parse filename =
+--   syntax (lex (read filename))
 
 -- Examples
 
