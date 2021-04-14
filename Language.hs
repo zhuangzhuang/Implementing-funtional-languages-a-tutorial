@@ -322,6 +322,35 @@ pThen combine p1 p2 toks =
   [ (combine v1 v2, toks2) | (v1, toks1) <- p1 toks, (v2, toks2) <- p2 toks1
   ]
 
+pThen3 :: (a -> b -> c -> d) -> Parser a -> Parser b -> Parser c -> Parser d
+pThen3 combine p1 p2 p3 toks =
+  [ (combine v1 v2 v3, toks3)
+    | (v1, toks1) <- p1 toks,
+      (v2, toks2) <- p2 toks1,
+      (v3, toks3) <- p3 toks2
+  ]
+
+pThen4 :: (a -> b -> c -> d -> e) -> Parser a -> Parser b -> Parser c -> Parser d -> Parser e
+pThen4 combine p1 p2 p3 p4 toks =
+  [ (combine v1 v2 v3 v4, toks4)
+    | (v1, toks1) <- p1 toks,
+      (v2, toks2) <- p2 toks1,
+      (v3, toks3) <- p3 toks2,
+      (v4, toks4) <- p4 toks3
+  ]
+
+pEmpty :: a -> Parser a
+pEmpty s toks = [(s, toks)]
+
+pZeroOrMore :: Parser a -> Parser [a]
+pZeroOrMore p = (pOneOrMore p) `pAlt` (pEmpty [])
+
+pOneOrMore :: Parser a -> Parser [a]
+pOneOrMore p = pThen (:) p (pZeroOrMore p)
+
+pApply :: Parser a -> (a -> b) -> Parser b
+pApply p f toks = [(f v1, toks1) | (v1, toks1) <- p toks]
+
 syntax :: [Token] -> CoreProgram
 syntax = error ""
 
@@ -358,3 +387,27 @@ pHelloOrGoodbye = (pLit "hello") `pAlt` (pLit "goodbye")
 pGreeting = pThen mk_pair pHelloOrGoodbye pVar
   where
     mk_pair hg name = (hg, name)
+
+pGreeting1 =
+  pThen
+    keep_first
+    (pThen mk_pair pHelloOrGoodbye pVar)
+    (pLit "!")
+  where
+    keep_first hg_name exclamation = hg_name
+    mk_pair hg name = (hg, name)
+
+pGreeting2 =
+  pThen3
+    mk_greeting
+    pHelloOrGoodbye
+    pVar
+    (pLit "!")
+  where
+    mk_greeting hg name exclamation = (hg, name)
+
+pGreetings :: Parser [(String, String)]
+pGreetings = pZeroOrMore pGreeting
+
+pGreetingN :: Parser Int
+pGreetingN = (pZeroOrMore pGreeting) `pApply` length
