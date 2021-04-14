@@ -136,20 +136,51 @@ flatten ::
   [(Iseq, Int)] -> -- work list
   String -- result
 flatten col ((INewLine, indent) : seqs) =
-  '\n' : (space indent) ++ (flatten indent seqs)
+  '\n' : space indent ++ (flatten indent seqs)
+flatten col ((IIndent seq, indent) : seqs) =
+  flatten col ((seq, col) : seqs)
+flatten col ((IStr s, indent) : seqs) =
+  s ++ flatten (col + length s) seqs
+flatten col ((INil, indent) : seqs) =
+  flatten col seqs
+flatten col ((IAppend seq1 seq2, indent) : seqs) =
+  flatten col ((seq1, indent) : (seq2, indent) : seqs)
+flatten col [] = ""
 
 iDisplay :: Iseq -> String
 iDisplay seq = flatten 0 [(seq, 0)]
 
 -- helper
 iConcat :: [Iseq] -> Iseq
-iConcat = error ""
+iConcat = foldr iAppend iNil
+
+iSpace :: Iseq
+iSpace = iStr " "
+
+iNum :: Int -> Iseq
+iNum n = iStr (show n)
 
 iInterleave :: Iseq -> [Iseq] -> Iseq
-iInterleave = error ""
+iInterleave sep [] = iNil
+iInterleave sep [seq] = seq
+iInterleave sep (seq : seqs) =
+  seq `iAppend` (sep `iAppend` iInterleave sep seqs)
 
 pprExpr :: CoreExpr -> Iseq
+pprExpr (ENum n) = iNum n
 pprExpr (EVar v) = iStr v
+pprExpr (EAp (EAp (EVar "+") e1) e2) = iConcat [pprAExpr e1, iStr " + ", pprAExpr e2]
+pprExpr (EAp (EAp (EVar "-") e1) e2) = iConcat [pprAExpr e1, iStr " - ", pprAExpr e2]
+pprExpr (EAp (EAp (EVar "*") e1) e2) = iConcat [pprAExpr e1, iStr " * ", pprAExpr e2]
+pprExpr (EAp (EAp (EVar "/") e1) e2) = iConcat [pprAExpr e1, iStr " / ", pprAExpr e2]
+pprExpr (EAp (EAp (EVar "<") e1) e2) = iConcat [pprAExpr e1, iStr " < ", pprAExpr e2]
+pprExpr (EAp (EAp (EVar "<=") e1) e2) = iConcat [pprAExpr e1, iStr " <= ", pprAExpr e2]
+pprExpr (EAp (EAp (EVar "==") e1) e2) = iConcat [pprAExpr e1, iStr " == ", pprAExpr e2]
+pprExpr (EAp (EAp (EVar "~=") e1) e2) = iConcat [pprAExpr e1, iStr " ~= ", pprAExpr e2]
+pprExpr (EAp (EAp (EVar ">=") e1) e2) = iConcat [pprAExpr e1, iStr " >= ", pprAExpr e2]
+pprExpr (EAp (EAp (EVar ">") e1) e2) = iConcat [pprAExpr e1, iStr " > ", pprAExpr e2]
+pprExpr (EAp (EAp (EVar "&") e1) e2) = iConcat [pprAExpr e1, iStr " & ", pprAExpr e2]
+pprExpr (EAp (EAp (EVar "|") e1) e2) = iConcat [pprAExpr e1, iStr " | ", pprAExpr e2]
 pprExpr (EAp e1 e2) =
   (pprExpr e1) `iAppend` (iStr " ") `iAppend` (pprAExpr e2)
 pprExpr (ELet isrec defns expr) =
@@ -166,6 +197,29 @@ pprExpr (ELet isrec defns expr) =
     keyword
       | not isrec = "let"
       | isrec = "letrec"
+pprExpr (ECase e alts) =
+  iConcat
+    [ iStr "case ",
+      pprExpr e,
+      iStr " of",
+      iNewline,
+      iStr " ",
+      iIndent (iInterleave iNl (map pprAlt alts))
+    ]
+  where
+    iNl = iConcat [iStr ";", iNewline]
+    pprAlt (tag, args, rhs) =
+      iConcat
+        [ iStr "<",
+          iNum tag,
+          iStr "> ",
+          pprArgs args,
+          iStr " -> ",
+          iIndent (pprExpr rhs)
+        ]
+
+pprAExpr e | isAtomicExpr e = pprExpr e
+pprAExpr e = iConcat [iStr "(", pprAExpr e, iStr ")"]
 
 pprDefns :: [(Name, CoreExpr)] -> Iseq
 pprDefns defns =
@@ -176,6 +230,25 @@ pprDefns defns =
 pprDefn :: (Name, CoreExpr) -> Iseq
 pprDefn (name, expr) =
   iConcat [iStr name, iStr " = ", iIndent (pprExpr expr)]
+
+pprArgs :: [Name] -> Iseq
+pprArgs args = iInterleave iSpace (map iStr args)
+
+pprSc :: CoreScDefn -> Iseq
+pprSc (name, args, body) =
+  iConcat
+    [ iStr name,
+      iSpace,
+      pprArgs args,
+      iStr " = ",
+      iIndent (pprExpr body)
+    ]
+
+pprProgram :: CoreProgram -> Iseq
+pprProgram prog =
+  iInterleave
+    (iAppend (iStr " ;") iNewline)
+    (map pprSc prog)
 
 pprint :: CoreProgram -> String
 pprint prog = iDisplay (pprProgram prog)
