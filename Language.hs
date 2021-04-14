@@ -303,6 +303,25 @@ clex (c1 : c2 : cs) | ([c1, c2] `elem` twoCharOps) = [c1, c2] : clex cs
 clex (c : cs) = [c] : clex cs
 clex [] = []
 
+-- parser
+type Parser a = [Token] -> [(a, [Token])]
+
+pLit :: String -> Parser String
+pLit s (tok : toks) | s == tok = [(s, toks)]
+pLit s toks = []
+
+pVar :: Parser String
+pVar (tok : toks) = [(tok, toks)]
+pVar [] = []
+
+pAlt :: Parser a -> Parser a -> Parser a
+pAlt p1 p2 toks = (p1 toks) ++ (p2 toks)
+
+pThen :: (a -> b -> c) -> Parser a -> Parser b -> Parser c
+pThen combine p1 p2 toks =
+  [ (combine v1 v2, toks2) | (v1, toks1) <- p1 toks, (v2, toks2) <- p2 toks1
+  ]
+
 syntax :: [Token] -> CoreProgram
 syntax = error ""
 
@@ -333,3 +352,9 @@ p =
 e1 = EVar "a"
 
 e2 = mkMultiAp 10 (EVar "f") (EVar "x")
+
+pHelloOrGoodbye = (pLit "hello") `pAlt` (pLit "goodbye")
+
+pGreeting = pThen mk_pair pHelloOrGoodbye pVar
+  where
+    mk_pair hg name = (hg, name)
