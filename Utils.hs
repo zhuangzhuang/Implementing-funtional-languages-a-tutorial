@@ -20,3 +20,6 @@ space n = space (n -1) ++ " "
 isIdChar, isWhiteSpace :: Char -> Bool
 isIdChar c = isAlpha c || isDigit c || (c == '_')
 isWhiteSpace c = c `elem` " \t\n"
+
+numval :: String -> Int
+numval = foldl (\a c -> 10 * a + ord c - ord '0') 0

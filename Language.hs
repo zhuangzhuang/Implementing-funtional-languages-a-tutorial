@@ -306,13 +306,13 @@ clex [] = []
 -- parser
 type Parser a = [Token] -> [(a, [Token])]
 
-pLit :: String -> Parser String
-pLit s (tok : toks) | s == tok = [(s, toks)]
-pLit s toks = []
+-- pLit :: String -> Parser String
+-- pLit s (tok : toks) | s == tok = [(s, toks)]
+-- pLit s toks = []
 
-pVar :: Parser String
-pVar (tok : toks) = [(tok, toks)]
-pVar [] = []
+-- pVar :: Parser String
+-- pVar (tok : toks) = [(tok, toks)]
+-- pVar [] = []
 
 pAlt :: Parser a -> Parser a -> Parser a
 pAlt p1 p2 toks = (p1 toks) ++ (p2 toks)
@@ -350,6 +350,37 @@ pOneOrMore p = pThen (:) p (pZeroOrMore p)
 
 pApply :: Parser a -> (a -> b) -> Parser b
 pApply p f toks = [(f v1, toks1) | (v1, toks1) <- p toks]
+
+pOneOrMoreWithSep :: Parser a -> Parser p -> Parser [a]
+pOneOrMoreWithSep p psep = pThen (:) p (pOneOrMoreWithSep_c p psep)
+
+pOneOrMoreWithSep_c :: Parser a -> Parser p -> Parser [a]
+pOneOrMoreWithSep_c p psep =
+  (pThen discard_sep psep (pOneOrMoreWithSep p psep)) `pAlt` (pEmpty [])
+  where
+    discard_sep sep vs = vs
+
+pSat :: (String -> Bool) -> Parser String
+pSat pred [] = []
+pSat pred (tok : toks)
+  | pred tok = [(tok, toks)]
+  | otherwise = []
+
+pLit :: String -> Parser String
+pLit s = pSat (== s)
+
+keywords :: [String]
+keywords = ["let", "letrec", "case", "in", "of", "Pack"]
+
+pVar :: Parser String
+pVar = pSat isVar
+  where
+    isVar s = isAlpha (head s) && s `notElem` keywords
+
+pNum :: Parser Int
+pNum = pSat (isDigit . head) `pApply` numval
+
+-- parse Core Program
 
 syntax :: [Token] -> CoreProgram
 syntax = error ""
