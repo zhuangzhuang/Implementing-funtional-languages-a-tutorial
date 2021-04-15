@@ -24,6 +24,18 @@ type CoreExpr = Expr Name
 
 type IsRec = Bool
 
+type Alter a = (Int, [a], Expr a)
+
+type CoreAlt = Alter Name
+
+type Program a = [ScDefn a]
+
+type CoreProgram = Program Name
+
+type ScDefn a = (Name, [a], Expr a)
+
+type CoreScDefn = ScDefn Name
+
 recursive, noRecursive :: IsRec
 recursive = True
 noRecursive = False
@@ -34,22 +46,10 @@ bindersOf defns = [name | (name, rhs) <- defns]
 rhssOf :: [(a, b)] -> [b]
 rhssOf defns = [rhs | (name, rhs) <- defns]
 
-type Alter a = (Int, [a], Expr a)
-
-type CoreAlt = Alter Name
-
 isAtomicExpr :: Expr a -> Bool
 isAtomicExpr (EVar v) = True
 isAtomicExpr (ENum v) = True
 isAtomicExpr e = False
-
-type Program a = [ScDefn a]
-
-type CoreProgram = Program Name
-
-type ScDefn a = (Name, [a], Expr a)
-
-type CoreScDefn = ScDefn Name
 
 preludeDefs :: CoreProgram
 preludeDefs =
@@ -382,8 +382,70 @@ pNum = pSat (isDigit . head) `pApply` numval
 
 -- parse Core Program
 
+pProgram :: Parser CoreProgram
+pProgram = pOneOrMoreWithSep pSc (pLit ";")
+
+pSc :: Parser CoreScDefn
+pSc = pThen4 mk_sc pVar (pZeroOrMore pVar) (pLit "=") pExpr
+
+mk_sc :: Name -> [Name] -> Name -> CoreExpr -> CoreScDefn
+mk_sc sc args eq rhs = (sc, args, rhs)
+
+pExpr :: Parser CoreExpr
+pExpr = pLet `pAlt` (pCase `pAlt` (pLambda `pAlt` pExpr1))
+
+pLet :: Parser CoreExpr
+pLet =
+  pThen4
+    mk_let
+    ((pLit "let") `pAlt` (pLit "letrec"))
+    pDefns
+    (pLit "in")
+    pExpr
+  where
+    mk_let keyword defns in' expr =
+      ELet (keyword == "letrec") defns expr
+
+pDefns :: Parser [(Name, Expr Name)]
+pDefns = pOneOrMoreWithSep pDefn (pLit ";")
+
+pDefn :: Parser (Name, Expr Name)
+pDefn = pThen3 mk_defn pVar (pLit "=") pExpr
+  where
+    mk_defn var equals rhs = (var, rhs)
+
+pCase :: Parser CoreExpr
+pCase = pThen4 mk_case (pLit "case") pExpr (pLit "of") pAlters
+  where
+    mk_case case' e of' alts = ECase e alts
+
+pAlters :: Parser [(Int, [String], CoreExpr)]
+pAlters = pOneOrMoreWithSep pAlter (pLit ";")
+
+pAlter :: Parser (Int, [String], CoreExpr)
+pAlter = pThen4 mk_alt pTag (pZeroOrMore pVar) (pLit "->") pExpr
+  where
+    mk_alt tag args arrow rhs = (tag, args, rhs)
+
+pTag :: Parser Int
+pTag = pThen3 get_tag (pLit "<") pNum (pLit ">")
+  where
+    get_tag lb tag rb = tag
+
+pLambda :: Parser CoreExpr
+pLambda = pThen4 mk_lam (pLit "\\") (pOneOrMore pVar) (pLit ".") pExpr
+  where
+    mk_lam lam vars dot expr = ELam vars expr
+
+pExpr1 :: Parser CoreExpr
+pExpr1 = error ""
+
 syntax :: [Token] -> CoreProgram
-syntax = error ""
+syntax = take_first_parse . pProgram
+  where
+    take_first_parse ((prog, []) : others) = prog
+    take_first_parse (parse : others) = take_first_parse others
+    take_first_parse other = error ""
 
 parse :: String -> CoreProgram
 parse = syntax . clex
