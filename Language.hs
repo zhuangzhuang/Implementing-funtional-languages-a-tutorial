@@ -437,8 +437,71 @@ pLambda = pThen4 mk_lam (pLit "\\") (pOneOrMore pVar) (pLit ".") pExpr
   where
     mk_lam lam vars dot expr = ELam vars expr
 
+data PartialExpr
+  = NoOp
+  | FoundOp Name CoreExpr
+
+assembleOp :: CoreExpr -> PartialExpr -> CoreExpr
+assembleOp e1 NoOp = e1
+assembleOp e1 (FoundOp op e2) = EAp (EAp (EVar op) e1) e2
+
 pExpr1 :: Parser CoreExpr
-pExpr1 = error ""
+pExpr1 = pThen assembleOp pExpr2 pExpr1c
+
+pExpr1c :: Parser PartialExpr
+pExpr1c = (pThen FoundOp (pLit "|") pExpr1) `pAlt` (pEmpty NoOp)
+
+pExpr2 = pThen assembleOp pExpr3 pExpr2c
+
+pExpr2c = (pThen FoundOp (pLit "&") pExpr2) `pAlt` (pEmpty NoOp)
+
+pExpr3 = pThen assembleOp pExpr4 pExpr3c
+
+pExpr3c = (pThen FoundOp pRelop pExpr4) `pAlt` (pEmpty NoOp)
+
+pExpr4 = pThen assembleOp pExpr5 pExpr4c
+
+pExpr4c =
+  (pThen FoundOp (pLit "+") pExpr4)
+    `pAlt` ( (pThen FoundOp (pLit "-") pExpr5)
+               `pAlt` (pEmpty NoOp)
+           )
+
+pExpr5 = pThen assembleOp pExpr6 pExpr5c
+
+pExpr5c =
+  (pThen FoundOp (pLit "*") pExpr5)
+    `pAlt` ( (pThen FoundOp (pLit "/") pExpr6)
+               `pAlt` (pEmpty NoOp)
+           )
+
+pExpr6 = (pOneOrMore pAtomic) `pApply` mk_ap_chain
+  where
+    mk_ap_chain (fn : args) = foldl EAp fn args
+
+pAtomic :: Parser CoreExpr
+pAtomic =
+  pConstr
+    `pAlt` ( pBracExpr
+               `pAlt` ( (pVar `pApply` EVar)
+                          `pAlt` ((pNum `pApply` ENum))
+                      )
+           )
+
+pBracExpr :: Parser CoreExpr
+pBracExpr = pThen3 mk_brack (pLit "(") pExpr (pLit ")")
+  where
+    mk_brack open expr close = expr
+
+pConstr = pThen4 pick_constr (pLit "Const") (pLit "{") pTagArity (pLit "}")
+  where
+    pick_constr cons lbrack constr rbrack = constr
+    pTagArity = pThen3 mk_constr pNum (pLit ",") pNum
+    mk_constr tag comma arity = EConstr tag arity
+
+pRelop = pSat (`elem` relops)
+  where
+    relops = ["<=", "<", ">=", ">", "==", "~="]
 
 syntax :: [Token] -> CoreProgram
 syntax = take_first_parse . pProgram
