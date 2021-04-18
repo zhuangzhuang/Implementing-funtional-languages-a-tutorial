@@ -83,3 +83,20 @@ remove [] a = error ""
 remove ((a', n) : cts) a
   | a == a' = cts
   | otherwise = (a', n) : remove cts a
+
+-- generate names
+type NameSupply = Int
+
+initialNameSuppy :: NameSupply
+initialNameSuppy = 0
+
+getName :: NameSupply -> String -> (NameSupply, String)
+getName name_supply prefix = (name_supply + 1, makeName prefix name_supply)
+
+getNames :: NameSupply -> [String] -> (NameSupply, [String])
+getNames name_supply prefixes =
+  (name_supply + length prefixes, zipWith makeName prefixes [name_supply ..])
+
+makeName :: String -> Int -> String
+makeName prefix ns =
+  prefix ++ "_" ++ shownum ns
