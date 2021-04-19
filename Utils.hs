@@ -100,3 +100,84 @@ getNames name_supply prefixes =
 makeName :: String -> Int -> String
 makeName prefix ns =
   prefix ++ "_" ++ shownum ns
+
+-- set
+
+type Set a = [a]
+
+setEmpty :: Set a
+setEmpty = []
+
+setIsEmpty :: Set a -> Bool
+setIsEmpty s = null s
+
+setSingleton :: a -> Set a
+setSingleton x = [x]
+
+setFromList ::(Eq a, Ord a)=> [a] -> Set a
+setFromList xs = rmdup (sort xs)
+                    where rmdup [] = []
+                          rmdup [x] = [x]
+                          rmdup (x:y:xs) | x == y = rmdup (y:xs)
+                                    | otherwise = x:rmdup (y:xs)
+setToList :: Set a -> [a]
+setToList xs = xs
+
+setUnion :: Ord a => Set a -> Set a -> Set a
+setUnion [] [] = []
+setUnion [] (b:bs) = (b:bs)
+setUnion (a:as) [] = (a:as)
+setUnion (a:as) (b:bs) | a < b = a:setUnion as (b:bs)
+                       | a == b = a:setUnion as bs
+                       | a > b = b:setUnion (a:as) bs
+
+setIntersection :: Ord a => Set a -> Set a -> Set a
+setIntersection [] [] = []
+setIntersection [] (b:bs) = []
+setIntersection (a:as) [] = []
+setIntersection (a:as) (b:bs) 
+                       | a < b = setIntersection as (b:bs)
+                       | a == b = a:setIntersection as bs
+                       | a > b =setIntersection (a:as) bs
+
+setSubtraction :: Ord a => Set a -> Set a -> Set a
+setSubtraction [] [] = []
+setSubtraction [] (b:bs) = []
+setSubtraction (a:as) [] = (a:as)
+setSubtraction (a:as) (b:bs) 
+                       | a < b = a:setIntersection as (b:bs)
+                       | a == b = setIntersection as bs
+                       | a > b =setIntersection (a:as) bs
+
+
+setElementOf :: Ord t => t -> Set t -> Bool
+setElementOf x [] = False 
+setElementOf x (y:ys) = x == y || (x > y && setElementOf x ys)
+
+setUnionList :: Ord a => [Set a] -> Set a
+setUnionList ss  = foldl setUnion setEmpty ss
+
+
+-- common
+
+first (a, b) = a
+second (a, b) = b
+
+-- map + foldll
+mapAccuml::(a -> b -> (a, c))
+          -> a
+          -> [b]
+          -> (a, [c])
+mapAccuml f acc [] = (acc, [])          
+mapAccuml f acc (x:xs) = (acc2, x':xs')
+                            where (acc1, x') = f acc x  
+                                  (acc2, xs') = mapAccuml f acc1 xs
+
+
+foldll :: (a -> b -> a) -> a->[b] -> a
+foldll = foldl
+
+sort :: Ord a => [a] -> [a]
+sort [] = []
+sort [x] = [x]
+sort (x:xs) = [y | y <- xs, y < x] ++ x:[y|y<-xs, y>=x] 
