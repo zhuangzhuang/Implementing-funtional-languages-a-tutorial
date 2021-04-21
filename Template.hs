@@ -148,6 +148,26 @@ instantiate (EAp e1 e2) heap env =
     (heap2, a2) = instantiate e2 heap1 env
 instantiate (EVar v) heap env =
   (heap, aLookup env v (error ("Undefined name" ++ show v)))
+instantiate (EConstr tag arity) heap env =
+  instantiateConstr tag arity heap env
+instantiate (ELet isrec defs body) heap env =
+  instantiateLet isrec defs body heap env
+instantiate (ECase e alts) heap env =
+  error "Can't instantiate case expr"
+
+instantiateConstr :: Int -> Int -> TiHeap -> ASSOC Name Addr -> (TiHeap, Addr)
+instantiateConstr tag arity heap env =
+  error "Can't "
+
+instantiateLet ::
+  IsRec ->
+  [(Name, Expr Name)] ->
+  Expr Name ->
+  TiHeap ->
+  ASSOC Name Addr ->
+  (TiHeap, Addr)
+instantiateLet isrec defs body heap env =
+  error "Can't "
 
 showResults :: [TiState] -> String
 showResults = error "asdf"
