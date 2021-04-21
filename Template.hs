@@ -25,13 +25,10 @@ evalMul state =
     then [state]
     else state : evalMul (stepMult state)
 
---  (stack, dump, heap, globals)
--- statk - stack of address
---
-
 data Node
   = NAp Addr Addr
-  | NSupercomb Name [Name] CoreExpr
+  | --        document/debug
+    NSupercomb Name [Name] CoreExpr
   | NNum Int
 
 type TiGlobals = ASSOC Name Addr
@@ -55,17 +52,102 @@ initialTiDump = DummyTiDump
 
 type TiHeap = Heap Node
 
+--  (stack, dump, heap, globals)
+-- statk - stack of address
+-- dump -- 暂时不用
+-- heap -- 手机各种node
+
 type TiState = (TiStack, TiDump, TiHeap, TiGlobals, TiStats)
 
 applyToStats :: (TiStats -> TiStats) -> TiState -> TiState
 applyToStats stats_fun (stack, dump, heap, sc_defs, stats) =
   (stack, dump, heap, sc_defs, stats_fun stats)
 
+extraPreludeDefs = []
+
+buildInitialHeap :: [CoreScDefn] -> (TiHeap, TiGlobals)
+buildInitialHeap sc_defs = mapAccuml allocateSc hInitial sc_defs
+
+allocateSc :: TiHeap -> CoreScDefn -> (TiHeap, (Name, Addr))
+allocateSc heap (name, args, body) =
+  (heap', (name, addr))
+  where
+    (heap', addr) = hAlloc heap (NSupercomb name args body)
+
 compile :: CoreProgram -> TiState
-compile = error "asdf"
+compile program =
+  (initial_stack, initialTiDump, initial_heap, globals, tiStatInitial)
+  where
+    sc_defs = program ++ preludeDefs ++ extraPreludeDefs
+    (initial_heap, globals) = buildInitialHeap sc_defs
+    initial_stack = [address_of_main]
+    address_of_main = aLookup globals "main" (error "main is not defined")
 
 eval :: TiState -> [TiState]
-eval = error "asdf"
+eval state = state : rest_states
+  where
+    rest_states
+      | tiFinal state = []
+      | otherwise = eval next_state
+    next_state = doAdmin (step state)
+
+doAdmin :: TiState -> TiState
+doAdmin state = applyToStats tiStatIncSetps state
+
+tiFinal :: TiState -> Bool
+tiFinal ([sole_addr], dump, heap, gloabls, stats) =
+  isDataNode (hLookup heap sole_addr)
+tiFinal ([], dump, heap, globals, stats) = error "Empty stack"
+tiFinal state = False
+
+isDataNode :: Node -> Bool
+isDataNode (NNum n) = True
+isDataNode node = False
+
+step :: TiState -> TiState
+step state =
+  dispatch (hLookup heap (hd stack))
+  where
+    (stack, dump, heap, globals, stats) = state
+    dispatch (NNum n) = numStep state n
+    dispatch (NAp a1 a2) = apStep state a1 a2
+    dispatch (NSupercomb sc args body) = scStep state sc args body
+
+numStep :: TiState -> Int -> TiState
+numStep state n = error "Number applied as function"
+
+apStep :: TiState -> Addr -> Addr -> TiState
+apStep (stack, dump, heap, globals, states) a1 a2 =
+  (a1 : stack, dump, heap, globals, states)
+
+scStep :: TiState -> Name -> [Name] -> CoreExpr -> TiState
+scStep (stack, dump, heap, globals, stats) sc_name arg_names body =
+  (new_stack, dump, new_heap, globals, stats)
+  where
+    new_stack = result_addr : (drop (length arg_names + 1) stack)
+    (new_heap, result_addr) = instantiate body heap env
+    env = arg_bindings ++ globals
+    arg_bindings = zip2 arg_names (getargs heap stack)
+
+getargs :: TiHeap -> TiStack -> [Addr]
+getargs heap (sc : stack) =
+  map get_arg stack
+  where
+    get_arg addr = arg where (NAp fun arg) = hLookup heap addr
+
+instantiate ::
+  CoreExpr ->
+  TiHeap ->
+  ASSOC Name Addr ->
+  (TiHeap, Addr)
+instantiate (ENum n) heap env = hAlloc heap (NNum n)
+instantiate (EAp e1 e2) heap env =
+  hAlloc heap2 (NAp a1 a2)
+  where
+    (heap1, a1) = instantiate e1 heap env
+    (heap2, a2) = instantiate e2 heap1 env
+instantiate (EVar v) heap env =
+  (heap, aLookup env v (error ("Undefined name" ++ show v)))
 
 showResults :: [TiState] -> String
 showResults = error "asdf"
