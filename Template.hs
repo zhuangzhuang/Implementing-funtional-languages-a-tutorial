@@ -170,7 +170,75 @@ instantiateLet isrec defs body heap env =
   error "Can't "
 
 showResults :: [TiState] -> String
-showResults = error "asdf"
+showResults states =
+  iDisplay
+    ( iConcat
+        [ iLayn (map showState states),
+          showStats (last states)
+        ]
+    )
+
+showState :: TiState -> Iseq
+showState (stack, dump, heap, globals, stats) =
+  iConcat [showStack heap stack, iNewline]
+
+showStack :: TiHeap -> TiStack -> Iseq
+showStack heap stack =
+  iConcat
+    [ iStr "Stk [",
+      iIndent (iInterleave iNewline (map show_stack_item stack)),
+      iStr " ]"
+    ]
+  where
+    show_stack_item addr =
+      iConcat
+        [ showFWAddr addr,
+          iStr ";",
+          showStkNode heap (hLookup heap addr)
+        ]
+
+showSktNode :: TiHeap -> Node -> Iseq
+showSktNode heap (NAp fun_addr arg_addr) =
+  iConcat
+    [ iStr "NAp ",
+      showFWAddr fun_addr,
+      iStr " ",
+      showFWAddr arg_addr,
+      iStr " (",
+      showNode (hLookup heap arg_addr),
+      iStr ")"
+    ]
+
+showStkNode heap node = showNode node
+
+showNode :: Node -> Iseq
+showNode (NAp a1 a2) =
+  iConcat
+    [ iStr "NAp ",
+      showAddr a1,
+      iStr " ",
+      showAddr a2
+    ]
+showNode (NSupercomb name args body) = iStr ("NSupercomb " ++ name)
+showNode (NNum n) = (iStr "NNum") `iAppend` (iNum n)
+
+showAddr :: Addr -> Iseq
+showAddr addr = iStr (show addr)
+
+showFWAddr :: Addr -> Iseq
+showFWAddr addr =
+  iStr (space (4 - length str) ++ str)
+  where
+    str = show addr
+
+showStats :: TiState -> Iseq
+showStats (stack, dump, heap, globals, stats) =
+  iConcat
+    [ iNewline,
+      iNewline,
+      iStr "Total number of steps = ",
+      iNum (tiStatGetSetps stats)
+    ]
 
 runProg :: String -> String
 runProg = showResults . eval . compile . parse
