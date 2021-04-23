@@ -166,8 +166,19 @@ instantiateLet ::
   TiHeap ->
   ASSOC Name Addr ->
   (TiHeap, Addr)
-instantiateLet isrec defs body heap env =
-  error "Can't "
+instantiateLet isrec defs body heap old_env =
+  instantiate body heap1 new_env
+  where
+    (heap1, extra_bindings) = mapAccuml instantiate_rhs heap defs
+    new_env = extra_bindings ++ old_env
+    rhs_env
+      | isrec = new_env
+      | otherwise = old_env
+
+    instantiate_rhs heap (name, rhs) =
+      (heap1, (name, addr))
+      where
+        (heap1, addr) = instantiate rhs heap rhs_env
 
 showResults :: [TiState] -> String
 showResults states =
